@@ -66,22 +66,9 @@ export default function DashboardClient({ session }: DashboardProps) {
         if (!data) return null;
         const myClasses = filterClassesForUser(data.schedule, data.courses, data.userProfile);
 
-        // Sort logic? Date is string "01-Jan...". Need parsing if sorting desired.
-        // Assuming sheet order is chronological.
-
-        // Filter Today
         const today = new Date();
-        // Format today to match sheet date format if possible "01-Jan-2026"
-        // This requires strict date parsing logic matching the sheet.
-        // Simplified: Check if date string contains today's formatted string.
-        // Let's implement a helper or use a library if date formats are complex.
-        // For now, let's just show ALL classes or implement a 'Today' filter if date format is standard.
-        // "Strings like DE 1 A... Rows = Dates"
-        // If Row[0] is "01-Jan-2026", we need to match that.
-
         const options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
         const todayStr = today.toLocaleDateString('en-GB', options).replace(/ /g, '-');
-        // e.g. "08 Jan 2026" -> "08-Jan-2026"
 
         const todaysClasses = myClasses.filter(c => c.date === todayStr);
 
@@ -89,6 +76,28 @@ export default function DashboardClient({ session }: DashboardProps) {
 
         return { myClasses, todaysClasses, stats };
     }, [data, attendance]);
+
+    // View State
+    const [view, setView] = useState<'today' | 'upcoming'>('today');
+
+    // Group Upcoming Classes
+    const groupedUpcoming = useMemo(() => {
+        if (!filteredData?.myClasses) return {};
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const future = filteredData.myClasses.filter(c => {
+            const d = new Date(c.date); // Ensure c.date parses correctly "DD-MMM-YYYY"
+            return d >= today;
+        });
+
+        const grouped: Record<string, typeof future> = {};
+        future.forEach(c => {
+            if (!grouped[c.date]) grouped[c.date] = [];
+            grouped[c.date].push(c);
+        });
+        return grouped;
+    }, [filteredData]);
 
     const [syncing, setSyncing] = useState(false);
 
@@ -116,7 +125,7 @@ export default function DashboardClient({ session }: DashboardProps) {
             </div>
         );
     }
-    // ... error block kept similar ...
+
     if (error) {
         return (
             <div className="p-8 text-center">
@@ -159,23 +168,88 @@ export default function DashboardClient({ session }: DashboardProps) {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-                {/* Stats */}
-                <CourseStats stats={filteredData.stats} courses={data.courses} />
+            <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-                {/* Today's Schedule */}
-                <TodaySchedule
-                    classes={filteredData.todaysClasses}
-                    courses={data.courses}
-                    attendance={attendance}
-                    onMarkAttendance={handleMarkAttendance}
-                />
+                {/* Tabs */}
+                <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-gray-100">
+                    {['today', 'upcoming'].map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => setView(tab as any)}
+                            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${view === tab
+                                    ? 'bg-indigo-50 text-indigo-700 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                }`}
+                        >
+                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        </button>
+                    ))}
+                </div>
 
-                {/* Debug / All Classes View (Optional) */}
-                {/* <details>
-          <summary>Debug: All My Classes</summary>
-          <pre>{JSON.stringify(filteredData.myClasses, null, 2)}</pre>
-        </details> */}
+                {view === 'today' && (
+                    <>
+                        <CourseStats stats={filteredData.stats} courses={data.courses} />
+                        <TodaySchedule
+                            classes={filteredData.todaysClasses}
+                            courses={data.courses}
+                            attendance={attendance}
+                            onMarkAttendance={handleMarkAttendance}
+                        />
+                    </>
+                )}
+
+                {view === 'upcoming' && (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-800">Upcoming Schedule</h2>
+                            <button
+                                onClick={handleSync}
+                                disabled={syncing}
+                                className="md:hidden text-sm text-indigo-600 font-medium"
+                            >
+                                {syncing ? "Syncing..." : "Sync to Calendar"}
+                            </button>
+                        </div>
+
+                        {Object.keys(groupedUpcoming).length === 0 ? (
+                            <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-gray-100">
+                                <p className="text-gray-500">No classes found from today onwards.</p>
+                            </div>
+                        ) : (
+                            Object.entries(groupedUpcoming).map(([date, sessions]) => (
+                                <div key={date} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-100">
+                                        <h3 className="font-semibold text-gray-700">{date}</h3>
+                                    </div>
+                                    <div className="divide-y divide-gray-100">
+                                        {sessions.map((session, idx) => (
+                                            <div key={idx} className={`p-4 flex justify-between items-center ${session.isCancelled ? 'bg-red-50 opacity-75' : ''
+                                                }`}>
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="text-sm font-bold text-indigo-600 w-16">
+                                                        {session.timeSlot.split('-')[0]}
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className={`font-medium ${session.isCancelled ? 'line-through decoration-red-500' : ''}`}>
+                                                                {session.courseCode}
+                                                            </span>
+                                                            {session.isCancelled && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Cancelled</span>}
+                                                        </div>
+                                                        <p className="text-xs text-gray-500">{data.courses[session.courseCode]?.name}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-xs text-gray-400">
+                                                    Session {session.sessionNumber}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
             </main>
         </div>
     );
