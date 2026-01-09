@@ -127,9 +127,18 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
     const sheetList = meta.data.sheets || [];
 
-    const courseSheet = sheetList.find(s => s.properties?.title?.includes("Details"))?.properties?.title || "Sheet A";
-    const timeTableSheet = sheetList.find(s => s.properties?.title?.includes("Time Table"))?.properties?.title || "Sheet B";
-    const studentSheet = sheetList.find(s => s.properties?.title?.includes("Student Master"))?.properties?.title || "Sheet C";
+    // Log for debugging
+    console.log("Found Sheets:", sheetList.map(s => s.properties?.title));
+
+    const courseSheet = sheetList.find(s => s.properties?.title?.includes("Details"))?.properties?.title
+        || sheetList[0]?.properties?.title || "Sheet1";
+
+    const timeTableSheet = sheetList.find(s => s.properties?.title?.includes("Time Table"))?.properties?.title
+        || sheetList[1]?.properties?.title || "Sheet2";
+
+    const studentSheet = sheetList.find(s => s.properties?.title?.includes("Student Master"))?.properties?.title
+        || sheetList.find(s => s.properties?.title?.includes("List"))?.properties?.title
+        || sheetList[2]?.properties?.title || "Sheet3";
 
     // We need to fetch 'gridData' for the Time Table to get formatting.
     // Standard 'values.batchGet' ONLY returns values, not formatting.
