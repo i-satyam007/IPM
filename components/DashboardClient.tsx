@@ -61,6 +61,31 @@ export default function DashboardClient({ session }: DashboardProps) {
         localStorage.setItem("ipm_attendance", JSON.stringify(newRecord));
     };
 
+    // Helper to parse "DD-MMM-YYYY" e.g "09-Jan-2026"
+    const parseSheetDate = (dateStr: string) => {
+        if (!dateStr) return null;
+        // Try standard Date
+        let d = new Date(dateStr);
+        if (!isNaN(d.getTime())) return d;
+
+        // Try manual parsing for "09-Jan-2026"
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0]);
+            const monthStr = parts[1];
+            const year = parseInt(parts[2]);
+            const months: Record<string, number> = {
+                'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+            };
+            const month = months[monthStr];
+            if (day && month !== undefined && year) {
+                return new Date(year, month, day);
+            }
+        }
+        return null;
+    };
+
     // Filter Data
     const filteredData = useMemo(() => {
         if (!data) return null;
@@ -87,8 +112,8 @@ export default function DashboardClient({ session }: DashboardProps) {
         today.setHours(0, 0, 0, 0);
 
         const future = filteredData.myClasses.filter(c => {
-            const d = new Date(c.date); // Ensure c.date parses correctly "DD-MMM-YYYY"
-            return d >= today;
+            const d = parseSheetDate(c.date);
+            return d ? d >= today : false;
         });
 
         const grouped: Record<string, typeof future> = {};
@@ -98,6 +123,12 @@ export default function DashboardClient({ session }: DashboardProps) {
         });
         return grouped;
     }, [filteredData]);
+
+    const sortedDates = Object.keys(groupedUpcoming).sort((a, b) => {
+        const da = parseSheetDate(a);
+        const db = parseSheetDate(b);
+        return (da?.getTime() || 0) - (db?.getTime() || 0);
+    });
 
     const [syncing, setSyncing] = useState(false);
 
@@ -211,18 +242,25 @@ export default function DashboardClient({ session }: DashboardProps) {
                             </button>
                         </div>
 
-                        {Object.keys(groupedUpcoming).length === 0 ? (
+                        {sortedDates.length === 0 ? (
                             <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-gray-100">
-                                <p className="text-gray-500">No classes found from today onwards.</p>
+                                <p className="text-gray-500">No upcoming classes found.</p>
+                                <div className="mt-4 p-4 bg-gray-50 rounded text-left text-xs text-gray-500 font-mono overflow-auto max-h-32">
+                                    <p className="font-bold mb-1">Debug Info:</p>
+                                    <p>Total Classes Fetched: {filteredData.myClasses.length}</p>
+                                    <p>First Class Date (Raw): {filteredData.myClasses[0]?.date || 'None'}</p>
+                                    <p>First Class Parsed: {parseSheetDate(filteredData.myClasses[0]?.date || '')?.toString() || 'Fail'}</p>
+                                    <p>Today (Local): {new Date().toString()}</p>
+                                </div>
                             </div>
                         ) : (
-                            Object.entries(groupedUpcoming).map(([date, sessions]) => (
+                            sortedDates.map((date) => (
                                 <div key={date} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                                     <div className="bg-gray-50 px-4 py-2 border-b border-gray-100">
                                         <h3 className="font-semibold text-gray-700">{date}</h3>
                                     </div>
                                     <div className="divide-y divide-gray-100">
-                                        {sessions.map((session, idx) => (
+                                        {groupedUpcoming[date].map((session, idx) => (
                                             <div key={idx} className={`p-4 flex justify-between items-center ${session.isCancelled ? 'bg-red-50 opacity-75' : ''
                                                 }`}>
                                                 <div className="flex items-center space-x-3">
