@@ -16,11 +16,20 @@ export async function GET() {
     }
 
     try {
+        console.log("Fetching schedule...");
         const data = await fetchFullSchedule(session.accessToken, spreadsheetId);
+
+        console.log(`Fetched Data: 
+            Courses: ${Object.keys(data.courses).length}
+            Schedule Rows: ${data.schedule.length}
+            Student Master Rows: ${data.studentMaster.length}
+        `);
 
         // Parse User Profile
         // Passing empty object for electives map for now (MVP)
         const userProfile = parseStudentProfile(session.user.email, data.studentMaster, {});
+
+        console.log("User Profile:", JSON.stringify(userProfile));
 
         return NextResponse.json({
             courses: data.courses,
