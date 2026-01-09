@@ -30,54 +30,77 @@ export const parseCourses = (rows: string[][]): Record<string, Course> => {
 export const parseSchedule = (data: any): ClassSession[] => {
     const sessions: ClassSession[] = [];
     const rows = data.rowData;
-    if (!rows || rows.length < 2) return sessions;
+    if (!rows || rows.length < 3) return sessions;
 
-    // Row 0: Header (Time Slots)
-    const headerRow = rows[0].values;
+    // Row 1 (Index 1): Header (Time Slots)
+    // "Session Date" (0) | "Classroom" (1) | "Section" (2) | "Slot 1" (3) ...
+    const headerRow = rows[1]?.values;
+    if (!headerRow) return sessions;
+
     const timeSlots: string[] = [];
+    // Slots start at Column 3 (D)
+    // We'll capture them to map subsequent data cells correctly.
+    // If a cell is empty/undefined, we shouldn't push a slot? 
+    // Actually, we iterate the data row by same indices.
 
-    headerRow.slice(1).forEach((cell: any, index: number) => {
-        timeSlots.push(cell.userEnteredValue?.stringValue || `Slot ${index + 1}`);
-    });
+    // Let's determine the max columns based on header
+    // We assume slot columns continue until end or specific stop.
+    // Let's just store the text for now.
 
-    rows.slice(1).forEach((row: any) => {
+    // We only care about cols >= 3.
+    // timeSlots[0] matches Col 3.
+    for (let i = 3; i < headerRow.length; i++) {
+        const val = headerRow[i]?.userEnteredValue?.stringValue;
+        timeSlots.push(val || `Slot ${i - 2}`);
+    }
+
+    // Data starts at Row 2 (Index 2)
+    rows.slice(2).forEach((row: any) => {
         const dateCell = row.values?.[0];
-        const date = dateCell?.userEnteredValue?.stringValue; // e.g. "01-Jan-2026"
+        const date = dateCell?.userEnteredValue?.stringValue; // "Thursday, January 15, 2026"
         if (!date) return;
 
-        // Iterate time slots
-        row.values?.slice(1).forEach((cell: any, index: number) => {
-            const text = cell.userEnteredValue?.stringValue;
-            if (!text || !text.trim()) return;
+        // Section Col 2
+        const sectionCell = row.values?.[2];
+        const rowSection = sectionCell?.userEnteredValue?.stringValue?.trim(); // "A" or "B"
 
-            const timeSlot = timeSlots[index] || `Slot ${index + 1}`;
+        // Iterate Time Slots (Cells starting at Col 3)
+        timeSlots.forEach((slotName, i) => {
+            const colIndex = i + 3;
+            const cell = row.values?.[colIndex];
 
-            // Parse cell: "DE 1 A" or "GT 1"
+            const text = cell?.userEnteredValue?.stringValue;
+            // Ignore "Lunch", "Break", empty
+            if (!text || !text.trim() || text.toLowerCase().includes("lunch") || text.toLowerCase().includes("break")) return;
+
+            // Parse cell: "DE 1 A"
             const parts = text.trim().split(/\s+/);
+            // Must have at least Code + Session (e.g. "GT 1")
             if (parts.length < 2) return;
 
             const courseCode = parts[0];
             const sessionNumber = parts[1];
+
+            // Determine Section:
+            // Priority 1: Cell text "DE 1 A" -> A
+            // Priority 2: Row Section "A" -> A
             let section: 'A' | 'B' | null = null;
 
             if (parts.length >= 3) {
                 const sec = parts[2].toUpperCase();
                 if (sec === 'A' || sec === 'B') section = sec;
             }
+            // Fallback to row section if cell didn't specify
+            if (!section && (rowSection === 'A' || rowSection === 'B')) {
+                section = rowSection;
+            }
 
             // Check Formatting (Strikethrough)
             const isCancelled = cell.effectiveFormat?.textFormat?.strikethrough === true;
 
-            // Handle "Updated to some other date" ?
-            // If cancelled, the app should probably show it as "Cancelled" or "Rescheduled"
-            // The prompt says "strikedthrough... and updated to some other date".
-            // This implies the cell might have text that indicates the change, OR there is another cell elsewhere.
-            // If this cell is struck, it is cancelled for THIS slot.
-            // We will mark isCancelled = true. The frontend can display it as struck.
-
             sessions.push({
                 date,
-                timeSlot,
+                timeSlot: slotName.replace(/\n/g, ' '), // Clean newlines in header
                 courseCode,
                 sessionNumber,
                 section,
