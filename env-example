@@ -1,0 +1,8 @@
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=changeme_to_a_random_string
+
+# Google Cloud Console Credentials
+# Create OAuth Client ID (Web Application) at https://console.cloud.google.com/apis/credentials
+# Add authorized redirect URI: http://localhost:3000/api/auth/callback/google
+GOOGLE_CLIENT_ID=your_client_id_here
+GOOGLE_CLIENT_SECRET=your_client_secret_here
