@@ -51,7 +51,8 @@ export const parseSchedule = (data: any, courses: Record<string, Course>): Class
         // Clean up slot: "Slot 1\n09:00 am - ..." -> "09:00 am - ..."
         // Regex to find time range
         let cleanSlot = val || `Slot ${i - 2}`;
-        const timeMatch = cleanSlot.match(/(\d{1,2}:\d{2}\s*(?:am|pm|noon|AM|PM).*?)(?:\r\n|\r|\n|$)/s);
+        // COMPATIBILITY FIX: Use [\s\S] instad of /s flag for dotAll to avoid target version issues
+        const timeMatch = cleanSlot.match(/(\d{1,2}:\d{2}\s*(?:am|pm|noon|AM|PM)[\s\S]*?)(?:\r\n|\r|\n|$)/);
         if (timeMatch) {
             cleanSlot = cleanSlot.replace(/Slot\s*\d+\s*/i, '').trim(); // Remove "Slot 1"
             cleanSlot = cleanSlot.replace(/\n/g, ' ').trim();
