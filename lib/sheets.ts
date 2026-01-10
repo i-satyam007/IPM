@@ -30,77 +30,75 @@ export const parseCourses = (rows: string[][]): Record<string, Course> => {
 export const parseSchedule = (data: any): ClassSession[] => {
     const sessions: ClassSession[] = [];
     const rows = data.rowData;
+
+    console.log(`[parseSchedule] Total Rows: ${rows?.length || 0}`);
+
     if (!rows || rows.length < 3) return sessions;
 
     // Row 1 (Index 1): Header (Time Slots)
-    // "Session Date" (0) | "Classroom" (1) | "Section" (2) | "Slot 1" (3) ...
     const headerRow = rows[1]?.values;
-    if (!headerRow) return sessions;
-
-    const timeSlots: string[] = [];
-    // Slots start at Column 3 (D)
-    // We'll capture them to map subsequent data cells correctly.
-    // If a cell is empty/undefined, we shouldn't push a slot? 
-    // Actually, we iterate the data row by same indices.
-
-    // Let's determine the max columns based on header
-    // We assume slot columns continue until end or specific stop.
-    // Let's just store the text for now.
-
-    // We only care about cols >= 3.
-    // timeSlots[0] matches Col 3.
-    for (let i = 3; i < headerRow.length; i++) {
-        const val = headerRow[i]?.userEnteredValue?.stringValue;
-        timeSlots.push(val || `Slot ${i - 2}`);
+    if (!headerRow) {
+        console.log("[parseSchedule] No Header Row found at Index 1");
+        return sessions;
     }
 
-    // Data starts at Row 2 (Index 2)
-    rows.slice(2).forEach((row: any) => {
-        const dateCell = row.values?.[0];
-        const date = dateCell?.userEnteredValue?.stringValue; // "Thursday, January 15, 2026"
-        if (!date) return;
+    const timeSlots: string[] = [];
+    // We only care about cols >= 3 (Index 3+ is Slot 1)
+    for (let i = 3; i < headerRow.length; i++) {
+        // Use formattedValue as fallback
+        const val = headerRow[i]?.userEnteredValue?.stringValue || headerRow[i]?.formattedValue;
+        timeSlots.push(val || `Slot ${i - 2}`);
+    }
+    console.log(`[parseSchedule] Found Time Slots: ${timeSlots.join(", ")}`);
 
-        // Section Col 2
+    // Data starts at Row 2 (Index 2)
+    rows.slice(2).forEach((row: any, rIdx: number) => {
+        const dateCell = row.values?.[0];
+        // CRITICAL FIX: Use formattedValue for Dates!
+        const date = dateCell?.userEnteredValue?.stringValue || dateCell?.formattedValue;
+
+        if (!date) {
+            // Optional: Log skipped row if needed, but might be too noisy
+            // console.log(`[parseSchedule] Row ${rIdx + 2} skipped: No Date`);
+            return;
+        }
+
+        // Section Col 2 (Index 2)
         const sectionCell = row.values?.[2];
-        const rowSection = sectionCell?.userEnteredValue?.stringValue?.trim(); // "A" or "B"
+        const rowSection = (sectionCell?.userEnteredValue?.stringValue || sectionCell?.formattedValue)?.trim();
 
         // Iterate Time Slots (Cells starting at Col 3)
         timeSlots.forEach((slotName, i) => {
             const colIndex = i + 3;
             const cell = row.values?.[colIndex];
 
-            const text = cell?.userEnteredValue?.stringValue;
+            const text = cell?.userEnteredValue?.stringValue || cell?.formattedValue;
+
             // Ignore "Lunch", "Break", empty
             if (!text || !text.trim() || text.toLowerCase().includes("lunch") || text.toLowerCase().includes("break")) return;
 
             // Parse cell: "DE 1 A"
             const parts = text.trim().split(/\s+/);
-            // Must have at least Code + Session (e.g. "GT 1")
             if (parts.length < 2) return;
 
             const courseCode = parts[0];
             const sessionNumber = parts[1];
 
-            // Determine Section:
-            // Priority 1: Cell text "DE 1 A" -> A
-            // Priority 2: Row Section "A" -> A
             let section: 'A' | 'B' | null = null;
 
             if (parts.length >= 3) {
                 const sec = parts[2].toUpperCase();
                 if (sec === 'A' || sec === 'B') section = sec;
             }
-            // Fallback to row section if cell didn't specify
             if (!section && (rowSection === 'A' || rowSection === 'B')) {
                 section = rowSection;
             }
 
-            // Check Formatting (Strikethrough)
             const isCancelled = cell.effectiveFormat?.textFormat?.strikethrough === true;
 
             sessions.push({
                 date,
-                timeSlot: slotName.replace(/\n/g, ' '), // Clean newlines in header
+                timeSlot: slotName.replace(/\n/g, ' '),
                 courseCode,
                 sessionNumber,
                 section,
@@ -109,13 +107,15 @@ export const parseSchedule = (data: any): ClassSession[] => {
             });
         });
     });
+
+    console.log(`[parseSchedule] Parsed ${sessions.length} sessions`);
     return sessions;
 };
 
 export const parseStudentProfile = (
     email: string,
     studentRows: string[][],
-    electiveRowsMap: Record<string, string[][]> // CourseCode -> Rows of that elective sheet
+    electiveRowsMap: Record<string, string[][]>
 ): UserProfile | null => {
     // 1. Find User Section from Student Master Sheet (C)
     // Cols: Email (0), Section (1)
@@ -177,20 +177,20 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
     const coursesData = valuesRes.data.valueRanges?.[0].values || [];
     const studentData = valuesRes.data.valueRanges?.[1].values || [];
 
-    // 2. Fetch Time Table with Formatting
+    // 2. Fetch Time Table with Formatting AND FormattedValue
     const gridRes = await sheets.spreadsheets.get({
         spreadsheetId,
         ranges: [timeTableSheet],
         includeGridData: true,
-        // optimize fields to reduce payload
-        fields: "sheets.data.rowData.values(userEnteredValue,effectiveFormat)"
+        // added formattedValue
+        fields: "sheets.data.rowData.values(userEnteredValue,effectiveFormat,formattedValue)"
     });
 
     const timeTableSheetData = gridRes.data.sheets?.[0]?.data?.[0]; // First range (Time Table), first grid
 
     return {
         courses: parseCourses(coursesData),
-        schedule: parseSchedule(timeTableSheetData), // Now passing gridData
+        schedule: parseSchedule(timeTableSheetData),
         studentMaster: studentData,
     };
 }
