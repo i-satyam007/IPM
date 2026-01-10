@@ -168,10 +168,16 @@ export const parseStudentProfile = (
     // 2. Find User Electives
     // Elective Sheets also have Email in Column D (Index 3)
     const electives: string[] = [];
+    console.log(`[parseStudentProfile] Checking for email: ${targetEmail}`);
+
     Object.entries(electiveRowsMap).forEach(([courseCode, rows]) => {
         // Map rows to Emails (Col D / Index 3)
+        // Debug first 5 rows
+        // console.log(`[parseStudentProfile] Checking ${courseCode}, first row emails:`, rows.slice(0, 5).map(r => r[3]));
+
         const distinctEmails = new Set(rows.map(r => r[3]?.trim().toLowerCase()));
         if (distinctEmails.has(targetEmail)) {
+            console.log(`[parseStudentProfile] Found match in ${courseCode}`);
             electives.push(courseCode);
         }
     });
@@ -212,6 +218,7 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
     const electiveCodeToSheetTitle: Record<string, string> = {};
 
     Object.values(courses).forEach(course => {
+        // Robust check for elective type
         if (course.type.toLowerCase().includes("elective") || course.type.toLowerCase().includes("compl.")) {
             // Fuzzy match: Does any sheet title include the Course Name?
             // e.g. Name "Game Theory" -> Sheet "List of ... Game Theory"
@@ -219,21 +226,28 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
                 s.properties?.title?.toLowerCase().includes(course.name.toLowerCase())
             );
             if (match && match.properties?.title) {
-                electiveSheetRanges.push(match.properties.title);
+                // QUOTE THE SHEET NAME to handle spaces safely in A1 notation
+                const safeTitle = `'${match.properties.title}'`;
+                electiveSheetRanges.push(safeTitle);
+                // Store the raw title for mapping back later
                 electiveCodeToSheetTitle[course.code] = match.properties.title;
             }
         }
     });
+
+    console.log("[fetchFullSchedule] Discovered Elective Sheets:", electiveCodeToSheetTitle);
 
     // 4. Student Master / Section Sheets
     const sectionASheet = sheetList.find(s => s.properties?.title?.toLowerCase().includes("section a"))?.properties?.title;
     const sectionBSheet = sheetList.find(s => s.properties?.title?.toLowerCase().includes("section b"))?.properties?.title;
 
     const rangesToFetch = [
-        ...(sectionASheet ? [sectionASheet] : []),
-        ...(sectionBSheet ? [sectionBSheet] : []),
+        ...(sectionASheet ? [`'${sectionASheet}'`] : []),
+        ...(sectionBSheet ? [`'${sectionBSheet}'`] : []),
         ...electiveSheetRanges
     ];
+
+    console.log("[fetchFullSchedule] Fetching Ranges:", rangesToFetch);
 
     let studentDataMap: Record<string, string[][]> = {};
     let electiveRowsMap: Record<string, string[][]> = {};
@@ -248,7 +262,7 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
 
         // Map back to what we requested
         returnedRanges.forEach((rangeObj, index) => {
-            const rangeName = rangeObj.range; // "SheetName!A1:Z99"
+            const rangeName = rangeObj.range; // "'List of ...'!A1:Z99" or "Section A!..."
             const val = rangeObj.values || [];
 
             // Check if it's Section A or B
@@ -262,11 +276,18 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
                 // Must be elective
                 // Find which code maps to this sheet
                 const entries = Object.entries(electiveCodeToSheetTitle);
+                let found = false;
                 for (const [code, sheetTitle] of entries) {
+                    // Check if rangeName contains the sheet title (careful of quotes)
+                    // rangeName usually comes back as "'Sheet Name'!Range"
                     if (rangeName?.includes(sheetTitle)) {
                         electiveRowsMap[code] = val;
+                        found = true;
                         break;
                     }
+                }
+                if (!found) {
+                    console.log(`[fetchFullSchedule] Warning: Could not map range ${rangeName} to any elective.`);
                 }
             }
         });
