@@ -213,29 +213,41 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
     const courses = parseCourses(courseValues.data.values || []);
 
     // 3. Dynamic Elective Sheet Discovery
-    // Identify sheets that match Elective Names
     const electiveSheetRanges: string[] = [];
     const electiveCodeToSheetTitle: Record<string, string> = {};
+    const debugLog: string[] = [];
 
+    debugLog.push("Scanning for elective sheets...");
     Object.values(courses).forEach(course => {
         // Robust check for elective type
         if (course.type.toLowerCase().includes("elective") || course.type.toLowerCase().includes("compl.")) {
-            // Fuzzy match: Does any sheet title include the Course Name?
-            // e.g. Name "Game Theory" -> Sheet "List of ... Game Theory"
-            const match = sheetList.find(s =>
+            // Strategy 1: Title includes Name (e.g. "Game Theory")
+            let match = sheetList.find(s =>
                 s.properties?.title?.toLowerCase().includes(course.name.toLowerCase())
             );
+
+            // Strategy 2: Title includes Code AND "List" (e.g. "List of ... GT")
+            if (!match) {
+                match = sheetList.find(s => {
+                    const title = s.properties?.title?.toLowerCase() || "";
+                    return title.includes(course.code.toLowerCase()) && title.includes("list");
+                });
+            }
+
             if (match && match.properties?.title) {
                 // QUOTE THE SHEET NAME to handle spaces safely in A1 notation
                 const safeTitle = `'${match.properties.title}'`;
                 electiveSheetRanges.push(safeTitle);
                 // Store the raw title for mapping back later
                 electiveCodeToSheetTitle[course.code] = match.properties.title;
+                debugLog.push(`Found sheet for ${course.code}: ${match.properties.title}`);
+            } else {
+                debugLog.push(`No sheet found for ${course.code} (${course.name})`);
             }
         }
     });
 
-    console.log("[fetchFullSchedule] Discovered Elective Sheets:", electiveCodeToSheetTitle);
+    console.log("[fetchFullSchedule] Discovered:", electiveCodeToSheetTitle);
 
     // 4. Student Master / Section Sheets
     const sectionASheet = sheetList.find(s => s.properties?.title?.toLowerCase().includes("section a"))?.properties?.title;

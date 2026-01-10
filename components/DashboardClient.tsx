@@ -22,6 +22,10 @@ export default function DashboardClient({ session }: DashboardProps) {
         courses: Record<string, Course>;
         schedule: ClassSession[];
         userProfile: UserProfile;
+        debug?: {
+            sheetNames: string[];
+            electiveLog: string[];
+        };
     } | null>(null);
 
     const [attendance, setAttendance] = useState<Record<string, 'Present' | 'Absent'>>({});
@@ -245,13 +249,6 @@ export default function DashboardClient({ session }: DashboardProps) {
                         {sortedDates.length === 0 ? (
                             <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-gray-100">
                                 <p className="text-gray-500">No upcoming classes found.</p>
-                                <div className="mt-4 p-4 bg-gray-50 rounded text-left text-xs text-gray-500 font-mono overflow-auto max-h-32">
-                                    <p className="font-bold mb-1">Debug Info:</p>
-                                    <p>Total Classes Fetched: {filteredData.myClasses.length}</p>
-                                    <p>First Class Date (Raw): {filteredData.myClasses[0]?.date || 'None'}</p>
-                                    <p>First Class Parsed: {parseSheetDate(filteredData.myClasses[0]?.date || '')?.toString() || 'Fail'}</p>
-                                    <p>Today (Local): {new Date().toString()}</p>
-                                </div>
                             </div>
                         ) : (
                             sortedDates.map((date) => (
@@ -261,8 +258,7 @@ export default function DashboardClient({ session }: DashboardProps) {
                                     </div>
                                     <div className="divide-y divide-gray-100">
                                         {groupedUpcoming[date].map((session, idx) => (
-                                            <div key={idx} className={`p-4 flex justify-between items-center ${session.isCancelled ? 'bg-red-50 opacity-75' : ''
-                                                }`}>
+                                            <div key={idx} className={`p-4 flex justify-between items-center ${session.isCancelled ? 'bg-red-50 opacity-75' : ''}`}>
                                                 <div className="flex items-center space-x-3">
                                                     <div className="text-sm font-bold text-indigo-600 w-16">
                                                         {session.timeSlot.split('-')[0]}
@@ -286,6 +282,19 @@ export default function DashboardClient({ session }: DashboardProps) {
                                 </div>
                             ))
                         )}
+
+                        <details className="mt-8 p-4 bg-gray-50 rounded-lg text-xs text-gray-400">
+                            <summary className="cursor-pointer font-bold mb-2">Debug Info (Click to expand)</summary>
+                            <pre className="whitespace-pre-wrap">
+                                User Email: {session.user?.email}{'\n'}
+                                Detected Section: {data.userProfile.section}{'\n'}
+                                Detected Electives: {data.userProfile.electives.join(', ')}{'\n'}
+                                {'\n'}--- Elective Discovery Log ---{'\n'}
+                                {data.debug?.electiveLog?.join('\n')}{'\n'}
+                                {'\n'}--- All Found Sheets ---{'\n'}
+                                {data.debug?.sheetNames?.join(', ')}
+                            </pre>
+                        </details>
                     </div>
                 )}
             </main>

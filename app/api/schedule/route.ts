@@ -19,14 +19,13 @@ export async function GET() {
         console.log("Fetching schedule...");
         const data = await fetchFullSchedule(session.accessToken, spreadsheetId);
 
-        console.log(`Fetched Data: 
+        console.log(`Fetched Data:
             Courses: ${Object.keys(data.courses).length}
             Schedule Rows: ${data.schedule.length}
             Student Master Rows: ${data.studentMaster.length}
         `);
 
-        // Parse User Profile
-        // Now passing real electives map
+        // Parse user (this logic runs on the fetched data)
         const userProfile = parseStudentProfile(session.user.email, data.studentMaster, data.electiveRowsMap);
 
         console.log("User Profile:", JSON.stringify(userProfile));
@@ -35,6 +34,7 @@ export async function GET() {
             courses: data.courses,
             schedule: data.schedule,
             userProfile,
+            debug: data.debug // Pass to client
         });
     } catch (error: any) {
         console.error("Error fetching sheets:", error);
