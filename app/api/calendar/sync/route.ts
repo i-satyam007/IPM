@@ -22,14 +22,11 @@ export async function POST() {
         const data = await fetchFullSchedule(session.accessToken, spreadsheetId);
 
         // 2. Filter for User
-        const userProfile = parseStudentProfile(session.user.email, data.studentMaster, {});
-        // Need logic to filter
+        const userProfile = parseStudentProfile(session.user.email, data.studentRows, data.electiveRowsMap);
 
-        // Import filter logic - wait, checking import path case sensitivity
-        // In previous steps I created `lib/attendance-logic.ts` (lowercase)
-        // The import above has `Attendance-logic`. Fixing.
-
-        const { filterClassesForUser } = require("@/lib/attendance-logic");
+        if (!userProfile) {
+            return NextResponse.json({ error: "User not found in student list" }, { status: 404 });
+        }
 
         const myClasses = filterClassesForUser(data.schedule, data.courses, userProfile);
 
