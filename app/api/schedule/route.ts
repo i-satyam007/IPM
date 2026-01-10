@@ -26,8 +26,8 @@ export async function GET() {
         `);
 
         // Parse User Profile
-        // Passing empty object for electives map for now (MVP)
-        const userProfile = parseStudentProfile(session.user.email, data.studentMaster, {});
+        // Now passing real electives map
+        const userProfile = parseStudentProfile(session.user.email, data.studentMaster, data.electiveRowsMap);
 
         console.log("User Profile:", JSON.stringify(userProfile));
 
