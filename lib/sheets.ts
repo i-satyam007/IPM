@@ -189,13 +189,25 @@ export const parseStudentProfile = (
     };
 };
 
-export async function fetchFullSchedule(accessToken: string, spreadsheetId: string) {
+interface ScheduleData {
+    courses: Record<string, Course>;
+    schedule: ClassSession[];
+    studentRows: string[][];
+    electiveRowsMap: Record<string, string[][]>;
+    debug: {
+        sheetNames: string[];
+        electiveLog: string[];
+    };
+}
+
+export const fetchFullSchedule = async (spreadsheetId: string, accessToken: string): Promise<ScheduleData> => {
     const sheets = getSheetsClient(accessToken);
 
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
     const sheetList = meta.data.sheets || [];
 
-    console.log("Found Sheets:", sheetList.map(s => s.properties?.title));
+    const allSheetNames = sheetList.map(s => s.properties?.title || 'Untitled Sheet');
+    console.log("Found Sheets:", allSheetNames);
 
     // 1. Identify Sheets
     const courseSheet = sheetList.find(s => s.properties?.title?.toLowerCase().includes("details"))?.properties?.title
@@ -232,6 +244,17 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
                     const title = s.properties?.title?.toLowerCase() || "";
                     return title.includes(course.code.toLowerCase()) && title.includes("list");
                 });
+            }
+
+            // Strategy 3: Split Code (e.g. "LSF-III" -> "LSF")
+            if (!match) {
+                const shortCode = course.code.split('-')[0].toLowerCase();
+                if (shortCode.length > 1) { // Avoid matching single letters
+                    match = sheetList.find(s => {
+                        const title = s.properties?.title?.toLowerCase() || "";
+                        return title.includes(shortCode) && title.includes("list");
+                    });
+                }
             }
 
             if (match && match.properties?.title) {
@@ -318,11 +341,17 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
     });
 
     const timeTableSheetData = gridRes.data.sheets?.[0]?.data?.[0];
+    const schedule = parseSchedule(timeTableSheetData, courses);
 
     return {
         courses,
-        schedule: parseSchedule(timeTableSheetData, courses),
-        studentMaster: combinedStudentRows,
-        electiveRowsMap // Pass this out so route can use it
+        schedule,
+        studentRows: combinedStudentRows,
+        electiveRowsMap,
+        debug: {
+            sheetNames: allSheetNames,
+            electiveLog: debugLog
+        }
     };
 }
+

@@ -22,11 +22,11 @@ export async function GET() {
         console.log(`Fetched Data:
             Courses: ${Object.keys(data.courses).length}
             Schedule Rows: ${data.schedule.length}
-            Student Master Rows: ${data.studentMaster.length}
+            Student Master Rows: ${data.studentRows.length}
         `);
 
         // Parse user (this logic runs on the fetched data)
-        const userProfile = parseStudentProfile(session.user.email, data.studentMaster, data.electiveRowsMap);
+        const userProfile = parseStudentProfile(session.user.email, data.studentRows, data.electiveRowsMap);
 
         console.log("User Profile:", JSON.stringify(userProfile));
 
