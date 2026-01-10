@@ -1,6 +1,46 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
+// Helper to refresh access token
+async function refreshAccessToken(token: any) {
+  try {
+    const url = "https://oauth2.googleapis.com/token";
+    const params = new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      grant_type: "refresh_token",
+      refresh_token: token.refreshToken,
+    });
+
+    const response = await fetch(url, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      method: "POST",
+      body: params,
+    });
+
+    const refreshedTokens = await response.json();
+
+    if (!response.ok) {
+      throw refreshedTokens;
+    }
+
+    return {
+      ...token,
+      accessToken: refreshedTokens.access_token,
+      expiresAt: Date.now() / 1000 + refreshedTokens.expires_in,
+      refreshToken: refreshedTokens.refresh_token ?? token.refreshToken, // Fallback to old refresh token
+    };
+  } catch (error) {
+    console.error("RefreshAccessTokenError", error);
+    return {
+      ...token,
+      error: "RefreshAccessTokenError",
+    };
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -18,17 +58,26 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, account }) {
-      // Persist the OAuth access_token to the token right after signin
+      // Initial sign in
       if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at;
+        return {
+          accessToken: account.access_token,
+          expiresAt: account.expires_at,
+          refreshToken: account.refresh_token,
+          user: token.user,
+        };
       }
-      return token;
+
+      // Return previous token if the access token has not expired yet
+      // expiresAt is in seconds generally
+      if (Date.now() < (token.expiresAt as number) * 1000) {
+        return token;
+      }
+
+      // Access token has expired, try to update it
+      return refreshAccessToken(token);
     },
     async session({ session, token }) {
-      // Send properties to the client, like an access_token from a provider.
-      // Note: We need to extend the Session type to include accessToken
       return {
         ...session,
         accessToken: token.accessToken,
