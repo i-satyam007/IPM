@@ -7,17 +7,18 @@ export function filterClassesForUser(
 ): ClassSession[] {
     return rawSchedule.filter((session) => {
         const course = courses[session.courseCode];
-        if (!course) return true; // Show unknown courses by default? Or hide? Let's show as fallback.
+        if (!course) return true; // Show unknown courses by default
 
-        // Check 1: Elective
-        if (course.type === 'Elective') {
+        const type = course.type.toLowerCase();
+
+        // Check 1: Elective (Compl. Elective or just Elective)
+        if (type.includes('elective')) {
             // ONLY show if in user's electives
-            // But wait, the sheet might use short codes "GT" and maybe user profile has "GT".
             return userProfile.electives.includes(session.courseCode);
         }
 
         // Check 2: Core
-        if (course.type === 'Core') {
+        if (type === 'core') {
             // Check Suffix/Section
             if (session.section) {
                 // If session has specific section, must match user's section
@@ -33,7 +34,8 @@ export function filterClassesForUser(
 
 export function calculateStats(
     sessions: ClassSession[],
-    attendance: Record<string, 'Present' | 'Absent'>
+    attendance: Record<string, 'Present' | 'Absent'>,
+    courses: Record<string, Course>
 ) {
     // Group by Course
     const stats: Record<string, { total: number; attended: number; leaves: number; allowedLeaves: number }> = {};
@@ -72,9 +74,28 @@ export function calculateStats(
         }
     });
 
+
+
+    // Custom Rule: 4Cr->20, 3Cr->25, 2Cr->10
+    const getTotalSessions = (credits: number) => {
+        if (credits === 4) return 20;
+        if (credits === 3) return 25;
+        if (credits === 2) return 10;
+        return credits * 5; // Fallback
+    };
+
     // Post-process for global totals or percentages
     Object.keys(stats).forEach(code => {
-        stats[code].allowedLeaves = Math.floor(stats[code].total * 0.20);
+        const course = courses[code];
+        // If course info is missing, default to what we counted or 0
+        const plannedTotal = course ? getTotalSessions(course.credits || 0) : stats[code].total;
+
+        // Allowed Leaves = 20% of PLANNED Total
+        const allowed = Math.ceil(plannedTotal * 0.20);
+
+        // Update stats
+        stats[code].total = plannedTotal;
+        stats[code].allowedLeaves = allowed;
     });
 
     return stats;

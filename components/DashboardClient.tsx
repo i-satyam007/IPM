@@ -97,7 +97,7 @@ export default function DashboardClient({ session }: DashboardProps) {
 
         const todaysClasses = myClasses.filter(c => c.date === todayStr);
 
-        const stats = calculateStats(myClasses, attendance);
+        const stats = calculateStats(myClasses, attendance, data.courses);
 
         return { myClasses, todaysClasses, stats };
     }, [data, attendance]);
@@ -208,8 +208,8 @@ export default function DashboardClient({ session }: DashboardProps) {
                             key={tab}
                             onClick={() => setView(tab as any)}
                             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${view === tab
-                                    ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                ? 'bg-indigo-50 text-indigo-700 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                 }`}
                         >
                             {tab.charAt(0).toUpperCase() + tab.slice(1)}

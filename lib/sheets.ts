@@ -22,7 +22,8 @@ export const parseCourses = (rows: string[][]): Record<string, Course> => {
             code,
             name: row[1]?.trim() || "", // Name at Index 1
             credits: Number(row[2]) || 0, // Credit at Index 2
-            type: (row[4]?.trim() as Course['type']) || "Unknown", // Type at Index 4
+            // Robust cleaning: remove newlines, multiple spaces, trim
+            type: (row[4]?.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim() as Course['type']) || "Unknown",
         };
     });
     return courses;
