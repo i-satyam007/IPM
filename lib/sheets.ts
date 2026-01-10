@@ -12,16 +12,17 @@ export const getSheetsClient = (accessToken: string) => {
 
 export const parseCourses = (rows: string[][]): Record<string, Course> => {
     const courses: Record<string, Course> = {};
-    // Assuming Row 0 is header. Start from Row 1.
-    // Columns: Code (0), Name (1), Credit (2), Type (3)
+    // Row 0 is header. Start from Row 1.
+    // Sheet Cols: Sl(0), Name(1), Credit(2), Code(3), Type(4)
     rows.slice(1).forEach((row) => {
-        const code = row[0]?.trim();
+        const code = row[3]?.trim(); // Code is at Index 3
         if (!code) return;
+
         courses[code] = {
             code,
-            name: row[1]?.trim() || "",
-            credits: Number(row[2]) || 0,
-            type: (row[3]?.trim() as Course['type']) || "Unknown",
+            name: row[1]?.trim() || "", // Name at Index 1
+            credits: Number(row[2]) || 0, // Credit at Index 2
+            type: (row[4]?.trim() as Course['type']) || "Unknown", // Type at Index 4
         };
     });
     return courses;
@@ -51,16 +52,27 @@ export const parseSchedule = (data: any): ClassSession[] => {
     }
     console.log(`[parseSchedule] Found Time Slots: ${timeSlots.join(", ")}`);
 
+    let lastDate: string | null = null; // For merged cells
+
     // Data starts at Row 2 (Index 2)
     rows.slice(2).forEach((row: any, rIdx: number) => {
         const dateCell = row.values?.[0];
-        // CRITICAL FIX: Use formattedValue for Dates!
-        const date = dateCell?.userEnteredValue?.stringValue || dateCell?.formattedValue;
+        let date = dateCell?.userEnteredValue?.stringValue || dateCell?.formattedValue;
 
-        if (!date) {
-            // Optional: Log skipped row if needed, but might be too noisy
-            // console.log(`[parseSchedule] Row ${rIdx + 2} skipped: No Date`);
-            return;
+        // Handle Merged Cells: If current date is empty but we're in a valid block, use lastDate.
+        // We need a heuristic to know if it's a valid row. Checking Section (Col 2) is good.
+        // If whole row is empty, we skip.
+
+        // Check if row has legitimate data (e.g. check Section or any Slot)
+        const hasData = row.values?.some((c: any, i: number) => i > 0 && (c.userEnteredValue?.stringValue || c.formattedValue));
+        if (!hasData) return;
+
+        if (date) {
+            lastDate = date;
+        } else if (lastDate) {
+            date = lastDate; // Carry forward
+        } else {
+            return; // No date context
         }
 
         // Section Col 2 (Index 2)
@@ -153,15 +165,19 @@ export async function fetchFullSchedule(accessToken: string, spreadsheetId: stri
     // Log for debugging
     console.log("Found Sheets:", sheetList.map(s => s.properties?.title));
 
-    const courseSheet = sheetList.find(s => s.properties?.title?.includes("Details"))?.properties?.title
+    // Case-Insensitive Find
+    const courseSheet = sheetList.find(s => s.properties?.title?.toLowerCase().includes("details"))?.properties?.title
         || sheetList[0]?.properties?.title || "Sheet1";
 
-    const timeTableSheet = sheetList.find(s => s.properties?.title?.includes("Time Table"))?.properties?.title
+    const timeTableSheet = sheetList.find(s => s.properties?.title?.toLowerCase().includes("time table"))?.properties?.title
         || sheetList[1]?.properties?.title || "Sheet2";
 
-    const studentSheet = sheetList.find(s => s.properties?.title?.includes("Student Master"))?.properties?.title
-        || sheetList.find(s => s.properties?.title?.includes("List"))?.properties?.title
+    const studentSheet = sheetList.find(s => s.properties?.title?.toLowerCase().includes("student master"))?.properties?.title
+        || sheetList.find(s => s.properties?.title?.toLowerCase().includes("list"))?.properties?.title
         || sheetList[2]?.properties?.title || "Sheet3";
+
+    // Debug Log which sheets are being selected
+    console.log(`Selected Sheets: Courses='${courseSheet}', TimeTable='${timeTableSheet}', Students='${studentSheet}'`);
 
     // We need to fetch 'gridData' for the Time Table to get formatting.
     // Standard 'values.batchGet' ONLY returns values, not formatting.
