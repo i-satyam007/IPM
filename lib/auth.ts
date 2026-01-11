@@ -48,7 +48,7 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
       authorization: {
         params: {
-          scope: "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/calendar",
+          scope: "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/spreadsheets.readonly",
           prompt: "consent",
           access_type: "offline",
           response_type: "code",
@@ -67,18 +67,15 @@ export const authOptions: NextAuthOptions = {
           user: token.user,
         };
       }
-      return token;
 
       // Return previous token if the access token has not expired yet
       // expiresAt is in seconds generally
-      /*
       if (Date.now() < (token.expiresAt as number) * 1000) {
         return token;
       }
 
       // Access token has expired, try to update it
       return refreshAccessToken(token);
-      */
     },
     async session({ session, token }) {
       return {
