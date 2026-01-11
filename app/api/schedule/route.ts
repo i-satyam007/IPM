@@ -17,6 +17,10 @@ export async function GET() {
 
     try {
         console.log("Fetching schedule...");
+        console.log("Session User:", session.user?.email);
+        console.log("Access Token present:", !!session.accessToken);
+        console.log("Access Token length:", session.accessToken?.length);
+
         const data = await fetchFullSchedule(session.accessToken, spreadsheetId);
 
         console.log(`Fetched Data:
