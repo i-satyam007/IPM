@@ -49,9 +49,6 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         params: {
           scope: "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/spreadsheets.readonly",
-          prompt: "consent",
-          access_type: "offline",
-          response_type: "code",
         },
       },
     }),
